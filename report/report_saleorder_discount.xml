@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        =====================================================================
+        HERENCIA 1: sale.report_saleorder_document
+        ─────────────────────────────────────────────────────────────────────
+        Objetivo: inyectar las variables de descuento en el t-call que invoca
+        el bloque de totales (sale.document_tax_totals), para que el
+        template de totales pueda acceder al monto de descuento.
+        =====================================================================
+    -->
+    <template
+        id="report_saleorder_document_discount_vars"
+        inherit_id="sale.report_saleorder_document"
+    >
+        <!--
+            Añadimos dos t-set DENTRO del t-call existente.
+            QWeb los procesa en el scope del callee, lo que nos permite
+            acceder luego a estas variables desde sale.document_tax_totals.
+
+            • sale_discount_total      → monto descontado (sin impuestos)
+            • sale_undiscounted_total  → total SIN descuento + impuestos (tachado)
+            • sale_show_discount       → flag desde configuración de empresa
+        -->
+        <xpath expr="//t[@t-call='sale.document_tax_totals']" position="inside">
+            <t t-set="sale_discount_total"     t-value="doc.amount_discount_total"/>
+            <t t-set="sale_undiscounted_total" t-value="(doc.amount_undiscounted or 0.0) + (doc.amount_tax or 0.0)"/>
+            <t t-set="sale_show_discount"      t-value="doc.company_id.sale_report_show_discount"/>
+        </xpath>
+    </template>
+
+    <!--
+        =====================================================================
+        HERENCIA 2: sale.document_tax_totals
+        ─────────────────────────────────────────────────────────────────────
+        Objetivo: reemplazar la fila estándar "Total" por el bloque
+        comercial de 3 filas cuando existe descuento y está activado
+        en la configuración de la empresa.
+
+        Formato resultante cuando hay descuento:
+            ──────────────────────────────────────
+            Total          $X.XXX,XX  ← tachado, color gris
+            Total a pagar  $X.XXX,XX  ← negrita, destacado
+            Descuento apl. $XXX,XX    ← verde
+            ──────────────────────────────────────
+
+        Cuando NO hay descuento → comportamiento estándar de Odoo.
+        =====================================================================
+    -->
+    <template
+        id="document_tax_totals_discount_rows"
+        inherit_id="sale.document_tax_totals"
+    >
+        <!--
+            Reemplazamos la única fila <tr class="o_total"> del template padre
+            (account.document_tax_totals_template) que muestra el grand total.
+        -->
+        <xpath expr="//tr[hasclass('o_total')]" position="replace">
+            <t t-if="sale_show_discount and sale_discount_total and sale_discount_total &gt; 0">
+                <!-- Línea separadora visual -->
+                <tr>
+                    <td colspan="2" class="pt-1 pb-0">
+                        <hr class="mt-0 mb-0" style="border-color: #dee2e6;"/>
+                    </td>
+                </tr>
+
+                <!-- Total SIN descuento (tachado) -->
+                <tr class="o_total_undiscounted">
+                    <td class="text-muted">
+                        <span style="text-decoration: line-through;">Total</span>
+                    </td>
+                    <td class="text-end text-muted">
+                        <span
+                            style="text-decoration: line-through;"
+                            t-out="sale_undiscounted_total"
+                            t-options='{"widget": "monetary", "display_currency": currency}'
+                        >0,00</span>
+                    </td>
+                </tr>
+
+                <!-- Total a pagar (negrita, tamaño mayor) -->
+                <tr class="o_total">
+                    <td>
+                        <strong style="font-size: 1.05em;">Total a pagar</strong>
+                    </td>
+                    <td class="text-end">
+                        <strong
+                            style="font-size: 1.05em;"
+                            t-out="tax_totals['total_amount_currency']"
+                            t-options='{"widget": "monetary", "display_currency": currency}'
+                        >0,00</strong>
+                    </td>
+                </tr>
+
+                <!-- Descuento aplicado (verde) -->
+                <tr class="o_discount_total">
+                    <td style="color: #198754; font-weight: 500;">
+                        <span>Descuento aplicado</span>
+                    </td>
+                    <td class="text-end" style="color: #198754; font-weight: 500;">
+                        <span
+                            t-out="sale_discount_total"
+                            t-options='{"widget": "monetary", "display_currency": currency}'
+                        >0,00</span>
+                    </td>
+                </tr>
+            </t>
+            <t t-else="">
+                <!-- Fila estándar de Odoo cuando no hay descuento o está desactivado -->
+                <tr class="o_total">
+                    <td><strong>Total</strong></td>
+                    <td class="text-end">
+                        <strong
+                            t-out="tax_totals['total_amount_currency']"
+                            t-options='{"widget": "monetary", "display_currency": currency}'
+                        >0,00</strong>
+                    </td>
+                </tr>
+            </t>
+        </xpath>
+    </template>
+</odoo>
