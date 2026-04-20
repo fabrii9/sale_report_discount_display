@@ -26,7 +26,7 @@ class SaleOrder(models.Model):
     amount_discount_total = fields.Monetary(
         string='Descuento aplicado',
         compute='_compute_amount_discount_total',
-        store=True,
+        store=False,  # Siempre recalcular para evitar problemas con pedidos existentes
         currency_field='currency_id',
     )
 
