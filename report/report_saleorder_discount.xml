@@ -4,158 +4,125 @@
         =====================================================================
         Módulo: sale_report_discount_display
         ─────────────────────────────────────────────────────────────────────
-        Reemplaza la tabla de totales del presupuesto cuando hay descuento,
-        mostrando:
-        - Total original (tachado)
-        - Total a pagar (destacado)
-        - Descuento aplicado (en verde)
+        ARQUITECTURA:
 
-        Si no hay descuento o está desactivada la opción, muestra el diseño
-        estándar de Odoo.
+        La localización argentina usa l10n_ar_sale.report_saleorder_document
+        (primary inherit de sale.report_saleorder_document) como template
+        real del PDF. Dentro de ese template, el t-call al bloque de totales
+        apunta a l10n_ar_sale.document_tax_totals (que ya tiene la lógica de
+        discriminación de IVA vía doc.vat_discriminated).
+
+        Nuestra estrategia:
+          1. Heredar l10n_ar_sale.report_saleorder_document para inyectar
+             las variables de descuento DENTRO del t-call correcto.
+          2. Heredar l10n_ar_sale.document_tax_totals para reemplazar SOLO
+             la fila <tr class="o_total"> con el bloque comercial.
+
+        Así preservamos 100% la lógica de IVA de Argentina: el t-foreach
+        de subtotales tiene t-if="doc.vat_discriminated" que ya controla
+        si se discrimina el IVA (Responsable Inscripto) o no (Consumidor Final).
         =====================================================================
     -->
+
+    <!--
+        PASO 1: Inyectar variables en el scope del t-call correcto
+        ─────────────────────────────────────────────────────────────────────
+        Heredamos el template argentino (primary) para agregar los t-set
+        DENTRO del t-call a l10n_ar_sale.document_tax_totals.
+        QWeb hace que esas variables estén disponibles dentro del callee.
+    -->
     <template
-        id="report_saleorder_document_discount_totals"
-        inherit_id="sale.report_saleorder_document"
+        id="report_saleorder_document_discount_vars"
+        inherit_id="l10n_ar_sale.report_saleorder_document"
     >
-        <!-- Reemplazamos la tabla de totales completa -->
-        <xpath expr="//div[@name='so_total_summary']//table[hasclass('o_total_table')]" position="replace">
-            <!--
-                Verificación de descuento:
-                - doc.amount_discount_total viene del campo compute en sale.order
-                - Lo comparamos con 0.01 para evitar problemas de redondeo flotante
-                - Si sale_report_show_discount no está seteado, por defecto mostramos
-            -->
-            <t t-set="discount_amt" t-value="doc.amount_discount_total or 0.0"/>
-            <t t-set="has_discount" t-value="discount_amt &gt; 0.01"/>
+        <xpath expr="//t[@t-call='l10n_ar_sale.document_tax_totals']" position="inside">
+            <t t-set="sale_discount_total"     t-value="doc.amount_discount_total or 0.0"/>
+            <t t-set="sale_undiscounted_total" t-value="(doc.amount_undiscounted or 0.0) + (doc.amount_tax or 0.0)"/>
+        </xpath>
+    </template>
 
-            <!-- ============================================================
-                 CASO 1: HAY DESCUENTO - Mostramos formato comercial
-                 ============================================================ -->
-            <t t-if="has_discount">
-                <t t-set="sale_undiscounted_total" t-value="(doc.amount_undiscounted or 0.0) + (doc.amount_tax or 0.0)"/>
+    <!--
+        PASO 2: Reemplazar SOLO la fila "Total" en el template de totales
+        ─────────────────────────────────────────────────────────────────────
+        Heredamos l10n_ar_sale.document_tax_totals para reemplazar la fila
+        <tr class="o_total"> con nuestro bloque comercial de 3 filas.
 
-                <table class="o_total_table table table-borderless">
-                    <!-- Subtotales e impuestos (copiado del template original) -->
-                    <t t-set="tax_totals" t-value="doc.tax_totals"/>
-                    <t t-set="same_tax_base" t-value="tax_totals.get('same_tax_base', True)"/>
-                    <t t-foreach="tax_totals.get('subtotals', [])" t-as="subtotal">
-                        <tr class="o_subtotal">
-                            <td>
-                                <span t-out="subtotal['name']">Untaxed Amount</span>
-                            </td>
-                            <td class="text-end">
-                                <span t-att-class="'oe_subtotal_footer_separator'"
-                                      t-out="subtotal['base_amount_currency']"
-                                      t-options='{"widget": "monetary", "display_currency": doc.currency_id}'
-                                >0.00</span>
-                            </td>
-                        </tr>
+        El resto del template (subtotals loop con t-if="doc.vat_discriminated"
+        y el grupo de impuestos) queda INTACTO, por lo que la discriminación
+        de IVA sigue funcionando exactamente como lo hace Odoo.
+    -->
+    <template
+        id="document_tax_totals_discount_rows"
+        inherit_id="l10n_ar_sale.document_tax_totals"
+    >
+        <!--
+            Reemplazamos SOLO la fila <tr class="o_total"> (la línea de "Total").
+            TODO LO DEMÁS queda intacto:
+              - El t-foreach con t-if="doc.vat_discriminated" sigue controlando
+                si se muestran los subtotales/impuestos según la responsabilidad AFIP.
+              - La fila de redondeo (cash_rounding) también se preserva.
+        -->
+        <xpath expr="//tr[hasclass('o_total')]" position="replace">
+            <t t-if="sale_discount_total and sale_discount_total &gt; 0.01">
+                <!-- Separador visual -->
+                <tr>
+                    <td colspan="2" class="pt-2 pb-0">
+                        <hr class="mt-0 mb-0" style="border-color: #dee2e6;"/>
+                    </td>
+                </tr>
 
-                        <t t-foreach="subtotal.get('tax_groups', [])" t-as="tax_group">
-                            <tr class="o_taxes">
-                                <t t-if="same_tax_base or tax_group.get('display_base_amount_currency') is None">
-                                    <td style="max-width: 200px;">
-                                        <span t-out="tax_group['group_name']">Tax</span>
-                                    </td>
-                                    <td class="text-end o_price_total">
-                                        <span class="text-nowrap"
-                                              t-out="tax_group['tax_amount_currency']"
-                                              t-options='{"widget": "monetary", "display_currency": doc.currency_id}'
-                                        >0.00</span>
-                                    </td>
-                                </t>
-                                <t t-else="">
-                                    <td>
-                                        <span t-out="tax_group['group_name']">Tax</span>
-                                        <span> on </span>
-                                        <span class="text-nowrap"
-                                              t-out="tax_group.get('display_base_amount_currency')"
-                                              t-options='{"widget": "monetary", "display_currency": doc.currency_id}'
-                                        >0.00</span>
-                                    </td>
-                                    <td class="text-end o_price_total">
-                                        <span class="text-nowrap"
-                                              t-out="tax_group['tax_amount_currency']"
-                                              t-options='{"widget": "monetary", "display_currency": doc.currency_id}'
-                                        >0.00</span>
-                                    </td>
-                                </t>
-                            </tr>
-                        </t>
-                    </t>
+                <!-- Total SIN descuento (tachado, color gris) -->
+                <tr class="o_total_undiscounted">
+                    <td class="text-muted">
+                        <span style="text-decoration: line-through;">Total</span>
+                    </td>
+                    <td class="text-end text-muted">
+                        <span
+                            style="text-decoration: line-through;"
+                            t-out="sale_undiscounted_total"
+                            t-options='{"widget": "monetary", "display_currency": currency}'
+                        >0.00</span>
+                    </td>
+                </tr>
 
-                    <!-- Redondeo si aplica -->
-                    <tr t-if="'cash_rounding_base_amount_currency' in tax_totals">
-                        <td>Rounding</td>
-                        <td class="text-end">
-                            <span t-out="tax_totals['cash_rounding_base_amount_currency']"
-                                  t-options='{"widget": "monetary", "display_currency": doc.currency_id}'
-                            >0</span>
-                        </td>
-                    </tr>
+                <!-- Total a pagar (negrita, destacado) -->
+                <tr class="o_total">
+                    <td>
+                        <strong style="font-size: 1.1em;">Total a pagar</strong>
+                    </td>
+                    <td class="text-end">
+                        <strong
+                            style="font-size: 1.1em;"
+                            t-out="tax_totals['total_amount_currency']"
+                            t-options='{"widget": "monetary", "display_currency": currency}'
+                        >0.00</strong>
+                    </td>
+                </tr>
 
-                    <!-- ═══════════════════════════════════════════════════════
-                         BLOQUE DE DESCUENTO COMERCIAL
-                         ═══════════════════════════════════════════════════════ -->
-
-                    <!-- Línea separadora -->
-                    <tr>
-                        <td colspan="2" class="pt-2 pb-0">
-                            <hr class="mt-0 mb-0" style="border-color: #dee2e6;"/>
-                        </td>
-                    </tr>
-
-                    <!-- Total SIN descuento (tachado, gris) -->
-                    <tr class="o_total_undiscounted">
-                        <td class="text-muted">
-                            <span style="text-decoration: line-through;">Total</span>
-                        </td>
-                        <td class="text-end text-muted">
-                            <span style="text-decoration: line-through;"
-                                  t-out="sale_undiscounted_total"
-                                  t-options='{"widget": "monetary", "display_currency": doc.currency_id}'
-                            >0.00</span>
-                        </td>
-                    </tr>
-
-                    <!-- Total a pagar (negrita, destacado) -->
-                    <tr class="o_total">
-                        <td>
-                            <strong style="font-size: 1.1em;">Total a pagar</strong>
-                        </td>
-                        <td class="text-end">
-                            <strong style="font-size: 1.1em;"
-                                    t-out="tax_totals.get('total_amount_currency', doc.amount_total)"
-                                    t-options='{"widget": "monetary", "display_currency": doc.currency_id}'
-                            >0.00</strong>
-                        </td>
-                    </tr>
-
-                    <!-- Descuento aplicado (verde) -->
-                    <tr class="o_discount_total">
-                        <td style="color: #198754; font-weight: 600;">
-                            Descuento aplicado
-                        </td>
-                        <td class="text-end" style="color: #198754; font-weight: 600;">
-                            <span t-out="doc.amount_discount_total"
-                                  t-options='{"widget": "monetary", "display_currency": doc.currency_id}'
-                            >0.00</span>
-                        </td>
-                    </tr>
-                </table>
+                <!-- Descuento aplicado (en verde) -->
+                <tr class="o_discount_total">
+                    <td style="color: #198754; font-weight: 600;">
+                        Descuento aplicado
+                    </td>
+                    <td class="text-end" style="color: #198754; font-weight: 600;">
+                        <span
+                            t-out="sale_discount_total"
+                            t-options='{"widget": "monetary", "display_currency": currency}'
+                        >0.00</span>
+                    </td>
+                </tr>
             </t>
-
-            <!-- ============================================================
-                 CASO 2: NO HAY DESCUENTO - Tabla original de Odoo
-                 ============================================================ -->
             <t t-else="">
-                <table class="o_total_table table table-borderless">
-                    <t t-call="sale.document_tax_totals">
-                        <t t-set="tax_totals" t-value="doc.tax_totals"/>
-                        <t t-set="currency" t-value="doc.currency_id"/>
-                    </t>
-                </table>
+                <!-- Sin descuento: fila estándar de Odoo -->
+                <tr class="o_total">
+                    <td><strong>Total</strong></td>
+                    <td class="text-end">
+                        <strong
+                            t-out="tax_totals['total_amount_currency']"
+                            t-options='{"widget": "monetary", "display_currency": currency}'
+                        >0.00</strong>
+                    </td>
+                </tr>
             </t>
         </xpath>
     </template>

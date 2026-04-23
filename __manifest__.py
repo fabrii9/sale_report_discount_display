@@ -15,7 +15,7 @@
         Si el pedido no tiene ningún descuento, se mantiene el diseño estándar de Odoo.
     """,
     'author': 'Custom - Cortinas Argentinas',
-    'depends': ['sale'],
+    'depends': ['sale', 'l10n_ar_sale'],
     'data': [
         'security/ir.model.access.csv',
         'views/res_config_settings_views.xml',
