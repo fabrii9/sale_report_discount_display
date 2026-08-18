@@ -33,10 +33,10 @@
         Heredamos l10n_ar_sale.document_tax_totals para reemplazar la fila
         <tr class="o_total"> con nuestro bloque comercial:
 
-          1. Total a pagar (destacado, fondo verde suave)
-          2. separador
-          3. Total sin descuento (tachado, gris, tipografía menor)
-          4. Descuento aplicado con % (verde, tipografía menor)
+          1. Total sin descuento (tachado, gris, tipografía menor)
+          2. Descuento aplicado con % (verde, tipografía menor)
+          3. Total a pagar (destacado, fondo verde suave) — abajo de todo,
+             la lectura cierra: tachado - descuento = total a pagar
 
         El resto del template (subtotals loop con t-if="doc.vat_discriminated"
         y el grupo de impuestos) queda INTACTO, por lo que la discriminación
@@ -55,21 +55,7 @@
         -->
         <xpath expr="//tr[hasclass('o_total')]" position="replace">
             <t t-if="doc._name == 'sale.order' and doc.amount_discount_total &gt; 0.01">
-                <!-- Total a pagar (negrita, fondo destacado): primero, junto a Subtotal + IVA -->
-                <tr class="o_total">
-                    <td style="background-color: #eaf6ee;">
-                        <strong style="font-size: 1.1em;">Total a pagar</strong>
-                    </td>
-                    <td class="text-end" style="background-color: #eaf6ee;">
-                        <strong
-                            style="font-size: 1.1em;"
-                            t-out="tax_totals['total_amount_currency']"
-                            t-options='{"widget": "monetary", "display_currency": currency}'
-                        >0.00</strong>
-                    </td>
-                </tr>
-
-                <!-- Separador visual: debajo queda la info secundaria del descuento -->
+                <!-- Separador visual: debajo va el detalle del descuento -->
                 <tr>
                     <td colspan="2" class="pt-2 pb-0">
                         <hr class="mt-0 mb-0" style="border-color: #dee2e6;"/>
@@ -103,6 +89,21 @@
                             t-out="doc.amount_discount_total"
                             t-options='{"widget": "monetary", "display_currency": currency}'
                         >0.00</span>
+                    </td>
+                </tr>
+
+                <!-- Total a pagar (negrita, fondo destacado): abajo de todo,
+                     cierra la cuenta tachado - descuento = total a pagar -->
+                <tr class="o_total">
+                    <td style="background-color: #eaf6ee;">
+                        <strong style="font-size: 1.1em;">Total a pagar</strong>
+                    </td>
+                    <td class="text-end" style="background-color: #eaf6ee;">
+                        <strong
+                            style="font-size: 1.1em;"
+                            t-out="tax_totals['total_amount_currency']"
+                            t-options='{"widget": "monetary", "display_currency": currency}'
+                        >0.00</strong>
                     </td>
                 </tr>
             </t>
