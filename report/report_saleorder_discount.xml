@@ -37,7 +37,7 @@
     >
         <xpath expr="//t[@t-call='l10n_ar_sale.document_tax_totals']" position="inside">
             <t t-set="sale_discount_total"     t-value="doc.amount_discount_total or 0.0"/>
-            <t t-set="sale_undiscounted_total" t-value="(doc.amount_undiscounted or 0.0) + (doc.amount_tax or 0.0)"/>
+            <t t-set="sale_undiscounted_total" t-value="doc.amount_total_undiscounted or 0.0"/>
         </xpath>
     </template>
 
