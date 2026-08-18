@@ -64,7 +64,21 @@
         -->
         <xpath expr="//tr[hasclass('o_total')]" position="replace">
             <t t-if="sale_discount_total and sale_discount_total &gt; 0.01">
-                <!-- Separador visual -->
+                <!-- Total a pagar (negrita, destacado): primero, junto a Subtotal + IVA -->
+                <tr class="o_total">
+                    <td>
+                        <strong style="font-size: 1.1em;">Total a pagar</strong>
+                    </td>
+                    <td class="text-end">
+                        <strong
+                            style="font-size: 1.1em;"
+                            t-out="tax_totals['total_amount_currency']"
+                            t-options='{"widget": "monetary", "display_currency": currency}'
+                        >0.00</strong>
+                    </td>
+                </tr>
+
+                <!-- Separador visual: debajo queda la info secundaria del descuento -->
                 <tr>
                     <td colspan="2" class="pt-2 pb-0">
                         <hr class="mt-0 mb-0" style="border-color: #dee2e6;"/>
@@ -82,20 +96,6 @@
                             t-out="sale_undiscounted_total"
                             t-options='{"widget": "monetary", "display_currency": currency}'
                         >0.00</span>
-                    </td>
-                </tr>
-
-                <!-- Total a pagar (negrita, destacado) -->
-                <tr class="o_total">
-                    <td>
-                        <strong style="font-size: 1.1em;">Total a pagar</strong>
-                    </td>
-                    <td class="text-end">
-                        <strong
-                            style="font-size: 1.1em;"
-                            t-out="tax_totals['total_amount_currency']"
-                            t-options='{"widget": "monetary", "display_currency": currency}'
-                        >0.00</strong>
                     </td>
                 </tr>
 
