@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Presupuesto PDF - Mostrar Descuento Aplicado',
-    'version': '18.0.1.0.0',
+    'version': '18.0.1.1.0',
     'category': 'Sales/Sales',
     'summary': 'Muestra de forma comercial el descuento total en el PDF del presupuesto.',
     'description': """
@@ -19,6 +19,7 @@
     'data': [
         'security/ir.model.access.csv',
         'views/res_config_settings_views.xml',
+        'views/sale_order_views.xml',
         'report/report_saleorder_discount.xml',
     ],
     'installable': True,

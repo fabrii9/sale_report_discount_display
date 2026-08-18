@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Muestra el descuento aplicado en el formulario del presupuesto,
+        debajo del widget de totales, para que sea visible sin abrir el PDF.
+        Solo aparece si el pedido tiene descuento (> 0.01).
+    -->
+    <record id="view_order_form_discount_display" model="ir.ui.view">
+        <field name="name">sale.order.form.discount.display</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='sale_total']" position="inside">
+                <div
+                    class="text-end pe-3"
+                    invisible="amount_discount_total &lt;= 0.01"
+                    style="color: #198754; font-weight: 600;"
+                >
+                    <span>Descuento aplicado: </span>
+                    <field
+                        name="amount_discount_total"
+                        widget="monetary"
+                        nolabel="1"
+                        readonly="1"
+                        class="oe_inline"
+                    />
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>
