@@ -12,11 +12,14 @@
         apunta a l10n_ar_sale.document_tax_totals (que ya tiene la lógica de
         discriminación de IVA vía doc.vat_discriminated).
 
-        Nuestra estrategia:
-          1. Heredar l10n_ar_sale.report_saleorder_document para inyectar
-             las variables de descuento DENTRO del t-call correcto.
-          2. Heredar l10n_ar_sale.document_tax_totals para reemplazar SOLO
-             la fila <tr class="o_total"> con el bloque comercial.
+        Nuestra estrategia: heredar l10n_ar_sale.document_tax_totals y
+        reemplazar SOLO la fila <tr class="o_total"> con el bloque comercial.
+
+        El bloque lee todo directamente desde `doc` (la sale.order), con la
+        guarda doc._name == 'sale.order', porque este template también se
+        renderiza en la vista del portal del cliente (donde no hay variables
+        inyectadas por el caller) y potencialmente desde facturas
+        (account.move, que no tiene estos campos).
 
         Así preservamos 100% la lógica de IVA de Argentina: el t-foreach
         de subtotales tiene t-if="doc.vat_discriminated" que ya controla
@@ -25,27 +28,15 @@
     -->
 
     <!--
-        PASO 1: Inyectar variables en el scope del t-call correcto
-        ─────────────────────────────────────────────────────────────────────
-        Heredamos el template argentino (primary) para agregar los t-set
-        DENTRO del t-call a l10n_ar_sale.document_tax_totals.
-        QWeb hace que esas variables estén disponibles dentro del callee.
-    -->
-    <template
-        id="report_saleorder_document_discount_vars"
-        inherit_id="l10n_ar_sale.report_saleorder_document"
-    >
-        <xpath expr="//t[@t-call='l10n_ar_sale.document_tax_totals']" position="inside">
-            <t t-set="sale_discount_total"     t-value="doc.amount_discount_total or 0.0"/>
-            <t t-set="sale_undiscounted_total" t-value="doc.amount_total_undiscounted or 0.0"/>
-        </xpath>
-    </template>
-
-    <!--
-        PASO 2: Reemplazar SOLO la fila "Total" en el template de totales
+        Reemplazar SOLO la fila "Total" en el template de totales
         ─────────────────────────────────────────────────────────────────────
         Heredamos l10n_ar_sale.document_tax_totals para reemplazar la fila
-        <tr class="o_total"> con nuestro bloque comercial de 3 filas.
+        <tr class="o_total"> con nuestro bloque comercial:
+
+          1. Total a pagar (destacado, fondo verde suave)
+          2. separador
+          3. Total sin descuento (tachado, gris, tipografía menor)
+          4. Descuento aplicado con % (verde, tipografía menor)
 
         El resto del template (subtotals loop con t-if="doc.vat_discriminated"
         y el grupo de impuestos) queda INTACTO, por lo que la discriminación
@@ -63,13 +54,13 @@
               - La fila de redondeo (cash_rounding) también se preserva.
         -->
         <xpath expr="//tr[hasclass('o_total')]" position="replace">
-            <t t-if="sale_discount_total and sale_discount_total &gt; 0.01">
-                <!-- Total a pagar (negrita, destacado): primero, junto a Subtotal + IVA -->
+            <t t-if="doc._name == 'sale.order' and doc.amount_discount_total &gt; 0.01">
+                <!-- Total a pagar (negrita, fondo destacado): primero, junto a Subtotal + IVA -->
                 <tr class="o_total">
-                    <td>
+                    <td style="background-color: #eaf6ee;">
                         <strong style="font-size: 1.1em;">Total a pagar</strong>
                     </td>
-                    <td class="text-end">
+                    <td class="text-end" style="background-color: #eaf6ee;">
                         <strong
                             style="font-size: 1.1em;"
                             t-out="tax_totals['total_amount_currency']"
@@ -85,35 +76,38 @@
                     </td>
                 </tr>
 
-                <!-- Total SIN descuento (tachado, color gris) -->
-                <tr class="o_total_undiscounted">
+                <!-- Total SIN descuento (tachado, color gris, tipografía menor) -->
+                <tr class="o_total_undiscounted" style="font-size: 0.9em;">
                     <td class="text-muted">
-                        <span style="text-decoration: line-through;">Total</span>
+                        <span style="text-decoration: line-through;">Total sin descuento</span>
                     </td>
                     <td class="text-end text-muted">
                         <span
                             style="text-decoration: line-through;"
-                            t-out="sale_undiscounted_total"
+                            t-out="doc.amount_total_undiscounted"
                             t-options='{"widget": "monetary", "display_currency": currency}'
                         >0.00</span>
                     </td>
                 </tr>
 
-                <!-- Descuento aplicado (en verde) -->
-                <tr class="o_discount_total">
+                <!-- Descuento aplicado con % (en verde, tipografía menor) -->
+                <tr class="o_discount_total" style="font-size: 0.9em;">
                     <td style="color: #198754; font-weight: 600;">
-                        Descuento aplicado
+                        <span>Descuento aplicado</span>
+                        <t t-if="doc.discount_percent_label">
+                            <span>(<t t-out="doc.discount_percent_label"/>%)</span>
+                        </t>
                     </td>
                     <td class="text-end" style="color: #198754; font-weight: 600;">
                         <span
-                            t-out="sale_discount_total"
+                            t-out="doc.amount_discount_total"
                             t-options='{"widget": "monetary", "display_currency": currency}'
                         >0.00</span>
                     </td>
                 </tr>
             </t>
             <t t-else="">
-                <!-- Sin descuento: fila estándar de Odoo -->
+                <!-- Sin descuento (o no es un presupuesto): fila estándar de Odoo -->
                 <tr class="o_total">
                     <td><strong>Total</strong></td>
                     <td class="text-end">

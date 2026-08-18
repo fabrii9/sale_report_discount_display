@@ -38,6 +38,12 @@ class SaleOrder(models.Model):
         store=False,
         currency_field='currency_id',
     )
+    # Porcentaje ya formateado para el PDF ("25", "12,5"), sin ceros de más
+    discount_percent_label = fields.Char(
+        string='% de descuento',
+        compute='_compute_amount_discount_total',
+        store=False,
+    )
 
     @api.depends(
         'order_line.discount',
@@ -58,5 +64,13 @@ class SaleOrder(models.Model):
                     partner=order.partner_shipping_id,
                 )
                 total_undiscounted += taxes['total_included']
+            discount_total = total_undiscounted - order.amount_total
             order.amount_total_undiscounted = total_undiscounted
-            order.amount_discount_total = total_undiscounted - order.amount_total
+            order.amount_discount_total = discount_total
+            if total_undiscounted > 0 and discount_total > 0:
+                pct = round(discount_total / total_undiscounted * 100.0, 2)
+                order.discount_percent_label = (
+                    ('%f' % pct).rstrip('0').rstrip('.').replace('.', ',')
+                )
+            else:
+                order.discount_percent_label = False

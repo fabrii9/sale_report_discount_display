@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Presupuesto PDF - Mostrar Descuento Aplicado',
-    'version': '18.0.1.1.0',
+    'version': '18.0.1.2.0',
     'category': 'Sales/Sales',
     'summary': 'Muestra de forma comercial el descuento total en el PDF del presupuesto.',
     'description': """
